@@ -385,20 +385,24 @@ export const getDataPotongan = async () => {
 // Logika matematika
 export const getDataGajiPegawai = async () => {
   try {
-    // Gaji Pegawai :
-    const resultDataPegawai = await getDataPegawai();
-    const resultDataJabatan = await getDataJabatan();
+    // Fetch all data in parallel for better performance
+    const [resultDataPegawai, resultDataJabatan, resultDataKehadiran, resultDataPotongan] = await Promise.all([
+      getDataPegawai(),
+      getDataJabatan(),
+      getDataKehadiran(),
+      getDataPotongan()
+    ]);
 
+    // Create a Map for O(1) jabatan lookups instead of O(n) find operations
+    const jabatanMap = new Map(
+      resultDataJabatan.map((jabatan) => [jabatan.nama_jabatan, jabatan])
+    );
+
+    // Gaji Pegawai :
     const gaji_pegawai = resultDataPegawai
-      .filter((pegawai) =>
-        resultDataJabatan.some(
-          (jabatan) => jabatan.nama_jabatan === pegawai.jabatan_pegawai
-        )
-      )
+      .filter((pegawai) => jabatanMap.has(pegawai.jabatan_pegawai))
       .map((pegawai) => {
-        const jabatan = resultDataJabatan.find(
-          (jabatan) => jabatan.nama_jabatan === pegawai.jabatan_pegawai
-        );
+        const jabatan = jabatanMap.get(pegawai.jabatan_pegawai);
         return {
           id: pegawai.id,
           nik: pegawai.nik,
@@ -411,8 +415,6 @@ export const getDataGajiPegawai = async () => {
       });
 
     // Potongan Pegawai :
-    const resultDataKehadiran = await getDataKehadiran();
-    const resultDataPotongan = await getDataPotongan();
 
     const potongan_pegawai = resultDataKehadiran.map((kehadiran) => {
       const potonganAlpha = kehadiran.alpha > 0 ?
