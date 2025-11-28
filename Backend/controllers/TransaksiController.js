@@ -2,6 +2,7 @@ import DataKehadiran from "../models/DataKehadiranModel.js";
 import DataPegawai from "../models/DataPegawaiModel.js";
 import DataJabatan from "../models/DataJabatanModel.js";
 import PotonganGaji from "../models/PotonganGajiModel.js";
+import { Op } from "sequelize";
 import moment from "moment";
 import "moment/locale/id.js";
 
@@ -97,29 +98,33 @@ export const createDataKehadiran = async (req, res) => {
   } = req.body;
 
   try {
-    const data_nama_pegawai = await DataPegawai.findOne({
-      where: {
-        nama_pegawai: nama_pegawai,
-      },
-    });
+    // Fetch all validation data in parallel for better performance
+    // Combined the two DataPegawai queries into one using Op.or
+    const [data_pegawai, data_nama_jabatan, nama_sudah_ada] = await Promise.all([
+      DataPegawai.findOne({
+        where: {
+          [Op.or]: [
+            { nama_pegawai: nama_pegawai },
+            { nik: nik }
+          ]
+        },
+      }),
+      DataJabatan.findOne({
+        where: {
+          nama_jabatan: nama_jabatan,
+        },
+      }),
+      DataKehadiran.findOne({
+        where: {
+          nama_pegawai: nama_pegawai,
+        },
+      })
+    ]);
 
-    const data_nama_jabatan = await DataJabatan.findOne({
-      where: {
-        nama_jabatan: nama_jabatan,
-      },
-    });
-
-    const data_nik_pegawai = await DataPegawai.findOne({
-      where: {
-        nik: nik,
-      },
-    });
-
-    const nama_sudah_ada = await DataKehadiran.findOne({
-      where: {
-        nama_pegawai: nama_pegawai,
-      },
-    });
+    // Validate pegawai exists with matching name
+    const data_nama_pegawai = data_pegawai && data_pegawai.nama_pegawai === nama_pegawai ? data_pegawai : null;
+    // Validate pegawai exists with matching NIK
+    const data_nik_pegawai = data_pegawai && data_pegawai.nik === nik ? data_pegawai : null;
 
     if (!data_nama_pegawai) {
       return res.status(404).json({ msg: "Data nama pegawai tidak ditemukan" });

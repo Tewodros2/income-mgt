@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import Layout from '../../../../layout';
 import { Link, useNavigate } from "react-router-dom";
 import { useDispatch, useSelector } from 'react-redux';
@@ -30,7 +30,8 @@ const DataGaji = () => {
     const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
     const endIndex = startIndex + ITEMS_PER_PAGE;
 
-    const filteredDataGaji = dataGaji.filter((gajiDataPegawai) => {
+    // Memoize filtered data to avoid recalculating on every render
+    const filteredDataGaji = useMemo(() => dataGaji.filter((gajiDataPegawai) => {
         const isMatchBulan =
             filterBulan === "" ||
             (typeof gajiDataPegawai.bulan === 'string' &&
@@ -42,7 +43,20 @@ const DataGaji = () => {
             (typeof gajiDataPegawai.nama_pegawai === 'string' &&
                 gajiDataPegawai.nama_pegawai.toLowerCase().includes(filterNama.toLowerCase()));
         return isMatchBulan && isMatchTahun && isMatchNama;
-    });
+    }), [dataGaji, filterBulan, filterTahun, filterNama]);
+
+    // Memoize unique entries computation to avoid O(n^2) on every render
+    const uniqueMonthYearEntries = useMemo(() => {
+        const seen = new Map();
+        return filteredDataGaji.filter((data) => {
+            const key = `${data.bulan}-${data.tahun}`;
+            if (seen.has(key)) {
+                return false;
+            }
+            seen.set(key, true);
+            return true;
+        });
+    }, [filteredDataGaji]);
 
     const goToPrevPage = () => {
         if (currentPage > 1) {
@@ -232,21 +246,14 @@ const DataGaji = () => {
                     </div>
                 </form>
                 <div className="bg-gray-2 text-left dark:bg-meta-4 mt-6">
-                    {filteredDataGaji
-                        .reduce((uniqueEntries, data) => {
-                            const isEntryExist = uniqueEntries.find(entry => entry.bulan === data.bulan && entry.tahun === data.tahun);
-                            if (!isEntryExist) {
-                                uniqueEntries.push(data);
-                            }
-                            return uniqueEntries;
-                        }, []).map(data => (data.tahun !== 0 && data.bulan !== 0 &&
-                            <h2 className="px-4 py-2 text-black dark:text-white" key={`${data.bulan}-${data.tahun}`}>
-                                Menampilkan Data Gaji Pegawai Bulan :
-                                <span className="font-medium"> {data.bulan} </span>
-                                Tahun :
-                                <span className="font-medium"> {data.tahun}</span>
-                            </h2>
-                        ))}
+                    {uniqueMonthYearEntries.map(data => (data.tahun !== 0 && data.bulan !== 0 &&
+                        <h2 className="px-4 py-2 text-black dark:text-white" key={`${data.bulan}-${data.tahun}`}>
+                            Menampilkan Data Gaji Pegawai Bulan :
+                            <span className="font-medium"> {data.bulan} </span>
+                            Tahun :
+                            <span className="font-medium"> {data.tahun}</span>
+                        </h2>
+                    ))}
                 </div>
 
             </div>
